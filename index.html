@@ -58,11 +58,6 @@
       justify-content: space-between;
       padding: 0 4px;
     }
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
     .brand-title {
       font-size: 1.15rem;
       font-weight: 700;
@@ -74,6 +69,22 @@
       color: var(--text-dim);
       font-weight: 500;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sync-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sync-btn:active { background: rgba(255, 255, 255, 0.1); }
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -117,8 +128,6 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--text-muted);
-      display: flex;
-      justify-content: space-between;
     }
 
     .input-wrapper {
@@ -338,34 +347,25 @@
 
   <div class="app-shell">
     <header>
-      <div class="brand">
+      <div>
         <div class="brand-title">COAL LAB Evaluator</div>
         <div class="brand-subtitle">BAI-3C • Fall 2026</div>
       </div>
-      <div id="statusPill" class="status-pill">
-        <span class="status-dot"></span>
-        <span id="statusText">Connecting</span>
+      <div class="header-actions">
+        <button class="sync-btn" onclick="fetchRoster(true)" title="Force Sync from Sheet">Sync</button>
+        <div id="statusPill" class="status-pill">
+          <span class="status-dot"></span>
+          <span id="statusText">Connecting</span>
+        </div>
       </div>
     </header>
 
     <div class="card">
-      <!-- 1. Select Lab -->
       <div class="field">
         <label class="field-label" for="labSelect">1. Lab Session</label>
         <div class="input-wrapper">
           <select id="labSelect">
             <option value="L2" selected>Lab 2 (L2)</option>
-            <option value="L3">Lab 3 (L3)</option>
-            <option value="L4">Lab 4 (L4)</option>
-            <option value="L5">Lab 5 (L5)</option>
-            <option value="L6">Lab 6 (L6)</option>
-            <option value="L7">Lab 7 (L7)</option>
-            <option value="L8">Lab 8 (L8)</option>
-            <option value="L10">Lab 10 (L10)</option>
-            <option value="L11">Lab 11 (L11)</option>
-            <option value="L12">Lab 12 (L12)</option>
-            <option value="L13">Lab 13 (L13)</option>
-            <option value="L14">Lab 14 (L14)</option>
           </select>
           <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.283a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -373,7 +373,6 @@
         </div>
       </div>
 
-      <!-- 2. Roll Number -->
       <div class="field">
         <label class="field-label" for="rollInput">2. Roll Number</label>
         <div class="input-wrapper">
@@ -389,7 +388,7 @@
         </div>
       </div>
 
-      <!-- Live Student Information Card -->
+      <!-- Student Card with Explicit Lab Label -->
       <div class="student-preview" id="studentCard">
         <div class="student-avatar" id="avatarText">AI</div>
         <div class="student-details">
@@ -399,7 +398,6 @@
         <div class="student-status" id="previewStatus">Pending</div>
       </div>
 
-      <!-- 3. Marks Input -->
       <div class="field">
         <label class="field-label" for="marksInput">3. Score</label>
         <div class="input-wrapper">
@@ -416,7 +414,6 @@
         </div>
       </div>
 
-      <!-- Actions -->
       <div class="button-row">
         <button class="btn btn-delete" id="deleteBtn" title="Delete Score" onclick="handleDelete()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -432,7 +429,6 @@
       <div id="toast" class="toast"></div>
     </div>
 
-    <!-- Live Session History -->
     <div class="recent-section" id="recentSection" style="display: none;">
       <div class="recent-header">Recent Evaluations This Session</div>
       <div class="recent-list" id="recentList"></div>
@@ -446,15 +442,17 @@
     let currentStudent = null;
     const sessionHistory = [];
 
-    async function init() {
+    // Force non-cached fetch from Google Sheet
+    async function fetchRoster(showToastMsg = false) {
+      updateStatus(false, "Syncing...");
       try {
-        const res = await fetch(API_URL);
+        const res = await fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
         students = data.students || [];
 
-        // Dynamically populate labs from sheet headers and default to L2
         if (data.labs && data.labs.length > 0) {
           const labSelect = document.getElementById('labSelect');
+          const currentSelected = labSelect.value;
           labSelect.innerHTML = '';
           data.labs.forEach(lab => {
             const opt = document.createElement('option');
@@ -462,10 +460,11 @@
             opt.textContent = `Lab ${lab.replace(/^L/i, '')} (${lab})`;
             labSelect.appendChild(opt);
           });
-          labSelect.value = data.labs.includes("L2") ? "L2" : data.labs[0];
+          labSelect.value = data.labs.includes(currentSelected) 
+            ? currentSelected 
+            : (data.labs.includes("L2") ? "L2" : data.labs[0]);
         }
 
-        // Build datalist options
         const dl = document.getElementById('studentsDatalist');
         dl.innerHTML = '';
         students.forEach(s => {
@@ -476,6 +475,8 @@
         });
 
         updateStatus(true, "Synced");
+        lookupStudent();
+        if (showToastMsg) showToast("Synced with Google Sheet!");
       } catch (err) {
         updateStatus(false, "Offline");
       }
@@ -537,7 +538,7 @@
         card.classList.add('active');
         avatarEl.textContent = getInitials(currentStudent.name);
         nameEl.textContent = currentStudent.name;
-        rollEl.textContent = currentStudent.rollNo;
+        rollEl.textContent = `${currentStudent.rollNo} • Target: ${lab}`;
         saveBtn.disabled = false;
 
         const score = currentStudent.marks[lab];
@@ -545,13 +546,13 @@
 
         if (isGraded) {
           statusEl.className = "student-status status-graded";
-          statusEl.textContent = `Graded: ${score} / 10`;
+          statusEl.textContent = `${lab}: ${score} / 10`;
           marksInput.value = score;
           saveBtn.textContent = "Update Mark";
           deleteBtn.style.display = "inline-flex";
         } else {
           statusEl.className = "student-status status-pending";
-          statusEl.textContent = "Pending";
+          statusEl.textContent = `${lab}: Unmarked`;
           marksInput.value = "";
           saveBtn.textContent = "Save Mark";
           deleteBtn.style.display = "none";
@@ -598,8 +599,7 @@
           })
         });
 
-        showToast(`Saved ${scoreNum}/10 for ${currentStudent.name}`);
-        
+        showToast(`Saved ${scoreNum}/10 for ${currentStudent.name} (${lab})`);
         document.getElementById('rollInput').value = '';
         document.getElementById('marksInput').value = '';
         lookupStudent();
@@ -616,7 +616,8 @@
       if (!currentStudent) return;
       const lab = document.getElementById('labSelect').value;
       
-      if (!confirm(`Delete score for ${currentStudent.name} (${currentStudent.rollNo}) in ${lab}?`)) return;
+      // Explicit warning naming the exact lab being deleted
+      if (!confirm(`Are you SURE you want to delete ${currentStudent.name}'s mark for ${lab}?`)) return;
 
       currentStudent.marks[lab] = null;
       lookupStudent();
@@ -632,7 +633,7 @@
           })
         });
 
-        showToast(`Score cleared for ${currentStudent.name}`);
+        showToast(`Cleared mark for ${currentStudent.name} in ${lab}`);
         document.getElementById('rollInput').value = '';
         lookupStudent();
       } catch (e) {
@@ -669,7 +670,10 @@
       if (e.key === 'Enter') handleSave();
     });
 
-    init();
+    // Auto re-fetch fresh data when switching tabs back to the web app
+    window.addEventListener('focus', () => fetchRoster(false));
+
+    fetchRoster();
   </script>
 </body>
 </html>
