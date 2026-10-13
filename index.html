@@ -452,10 +452,9 @@
         const data = await res.json();
         students = data.students || [];
 
-        // Dynamically populate labs directly from the sheet headers
+        // Dynamically populate labs from sheet headers and default to L2
         if (data.labs && data.labs.length > 0) {
           const labSelect = document.getElementById('labSelect');
-          const currentSelected = labSelect.value;
           labSelect.innerHTML = '';
           data.labs.forEach(lab => {
             const opt = document.createElement('option');
@@ -463,9 +462,7 @@
             opt.textContent = `Lab ${lab.replace(/^L/i, '')} (${lab})`;
             labSelect.appendChild(opt);
           });
-          if (data.labs.includes(currentSelected)) {
-            labSelect.value = currentSelected;
-          }
+          labSelect.value = data.labs.includes("L2") ? "L2" : data.labs[0];
         }
 
         // Build datalist options
