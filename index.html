@@ -52,7 +52,6 @@
       gap: 16px;
     }
 
-    /* App Header */
     header {
       display: flex;
       align-items: center;
@@ -94,7 +93,6 @@
       background: currentColor;
     }
 
-    /* Main Card */
     .card {
       background: var(--card-bg);
       backdrop-filter: blur(16px);
@@ -108,7 +106,6 @@
       gap: 18px;
     }
 
-    /* Form Fields */
     .field {
       display: flex;
       flex-direction: column;
@@ -172,7 +169,6 @@
       pointer-events: none;
     }
 
-    /* Dynamic Student Preview Card */
     .student-preview {
       display: none;
       align-items: center;
@@ -238,7 +234,6 @@
       border: 1px solid rgba(245, 158, 11, 0.2);
     }
 
-    /* Buttons */
     .button-row {
       display: flex;
       gap: 10px;
@@ -281,7 +276,6 @@
       flex-shrink: 0;
     }
 
-    /* Toast Notification */
     .toast {
       display: none;
       padding: 10px 14px;
@@ -294,7 +288,6 @@
     .toast-success { background: var(--success-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
     .toast-error { background: var(--danger-bg); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
 
-    /* Session Recent Feed */
     .recent-section {
       display: flex;
       flex-direction: column;
@@ -344,7 +337,6 @@
 <body>
 
   <div class="app-shell">
-    <!-- Header -->
     <header>
       <div class="brand">
         <div class="brand-title">COAL LAB Evaluator</div>
@@ -356,21 +348,19 @@
       </div>
     </header>
 
-    <!-- Evaluation Card -->
     <div class="card">
       <!-- 1. Select Lab -->
       <div class="field">
         <label class="field-label" for="labSelect">1. Lab Session</label>
         <div class="input-wrapper">
           <select id="labSelect">
-            <option value="L2" selected>Lab 2 (L2)</option>
+            <option value="L2">Lab 2 (L2)</option>
             <option value="L3">Lab 3 (L3)</option>
             <option value="L4">Lab 4 (L4)</option>
             <option value="L5">Lab 5 (L5)</option>
             <option value="L6">Lab 6 (L6)</option>
-            <option value="L6">Lab 7 (L7)</option>
+            <option value="L7" selected>Lab 7 (L7)</option>
             <option value="L8">Lab 8 (L8)</option>
-            <option value="L6">Lab 9 (L9)</option>
             <option value="L10">Lab 10 (L10)</option>
             <option value="L11">Lab 11 (L11)</option>
             <option value="L12">Lab 12 (L12)</option>
@@ -450,7 +440,6 @@
   </div>
 
   <script>
-    // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     const API_URL = "https://script.google.com/macros/s/AKfycbyqriYBVbeLpVFLY3-cPCR3PFEuH8xTLA505LobIyEa6Ms24Yb4yQXSWtAxkbZdZz_r/exec";
 
     let students = [];
@@ -462,6 +451,22 @@
         const res = await fetch(API_URL);
         const data = await res.json();
         students = data.students || [];
+
+        // Dynamically populate labs directly from the sheet headers
+        if (data.labs && data.labs.length > 0) {
+          const labSelect = document.getElementById('labSelect');
+          const currentSelected = labSelect.value;
+          labSelect.innerHTML = '';
+          data.labs.forEach(lab => {
+            const opt = document.createElement('option');
+            opt.value = lab;
+            opt.textContent = `Lab ${lab.replace(/^L/i, '')} (${lab})`;
+            labSelect.appendChild(opt);
+          });
+          if (data.labs.includes(currentSelected)) {
+            labSelect.value = currentSelected;
+          }
+        }
 
         // Build datalist options
         const dl = document.getElementById('studentsDatalist');
@@ -581,7 +586,6 @@
       saveBtn.disabled = true;
       saveBtn.textContent = "Saving...";
 
-      // Optimistic update
       currentStudent.marks[lab] = scoreNum;
       pushRecent(currentStudent.name, currentStudent.rollNo, lab, scoreNum);
 
@@ -599,7 +603,6 @@
 
         showToast(`Saved ${scoreNum}/10 for ${currentStudent.name}`);
         
-        // Reset inputs and focus back for the next student
         document.getElementById('rollInput').value = '';
         document.getElementById('marksInput').value = '';
         lookupStudent();
