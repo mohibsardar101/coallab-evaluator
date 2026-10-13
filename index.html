@@ -69,22 +69,7 @@
       color: var(--text-dim);
       font-weight: 500;
     }
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .sync-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
-      color: var(--text-muted);
-      border-radius: 8px;
-      padding: 5px 10px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .sync-btn:active { background: rgba(255, 255, 255, 0.1); }
+
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -96,6 +81,7 @@
       background: rgba(16, 185, 129, 0.1);
       border: 1px solid rgba(16, 185, 129, 0.25);
       color: #34d399;
+      transition: all 0.2s ease;
     }
     .status-dot {
       width: 6px;
@@ -351,12 +337,9 @@
         <div class="brand-title">COAL LAB Evaluator</div>
         <div class="brand-subtitle">BAI-3C • Fall 2026</div>
       </div>
-      <div class="header-actions">
-        <button class="sync-btn" onclick="fetchRoster(true)" title="Force Sync from Sheet">Sync</button>
-        <div id="statusPill" class="status-pill">
-          <span class="status-dot"></span>
-          <span id="statusText">Connecting</span>
-        </div>
+      <div id="statusPill" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Connecting</span>
       </div>
     </header>
 
@@ -388,7 +371,6 @@
         </div>
       </div>
 
-      <!-- Student Card with Explicit Lab Label -->
       <div class="student-preview" id="studentCard">
         <div class="student-avatar" id="avatarText">AI</div>
         <div class="student-details">
@@ -440,19 +422,24 @@
 
     let students = [];
     let currentStudent = null;
+    let isSyncing = false;
     const sessionHistory = [];
 
-    // Force non-cached fetch from Google Sheet
-    async function fetchRoster(showToastMsg = false) {
-      updateStatus(false, "Syncing...");
+    // Silent background sync
+    async function syncData(isSilent = false) {
+      if (isSyncing) return;
+      isSyncing = true;
+
+      if (!isSilent) updateStatus(false, "Syncing...");
+
       try {
         const res = await fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" });
         const data = await res.json();
         students = data.students || [];
 
-        if (data.labs && data.labs.length > 0) {
-          const labSelect = document.getElementById('labSelect');
-          const currentSelected = labSelect.value;
+        // Build lab dropdown if not already created
+        const labSelect = document.getElementById('labSelect');
+        if (data.labs && data.labs.length > 0 && labSelect.options.length <= 1) {
           labSelect.innerHTML = '';
           data.labs.forEach(lab => {
             const opt = document.createElement('option');
@@ -460,25 +447,29 @@
             opt.textContent = `Lab ${lab.replace(/^L/i, '')} (${lab})`;
             labSelect.appendChild(opt);
           });
-          labSelect.value = data.labs.includes(currentSelected) 
-            ? currentSelected 
-            : (data.labs.includes("L2") ? "L2" : data.labs[0]);
+          labSelect.value = data.labs.includes("L2") ? "L2" : data.labs[0];
         }
 
+        // Build datalist options
         const dl = document.getElementById('studentsDatalist');
-        dl.innerHTML = '';
-        students.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.rollNo;
-          opt.label = s.name;
-          dl.appendChild(opt);
-        });
+        if (dl.options.length !== students.length) {
+          dl.innerHTML = '';
+          students.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.rollNo;
+            opt.label = s.name;
+            dl.appendChild(opt);
+          });
+        }
 
-        updateStatus(true, "Synced");
-        lookupStudent();
-        if (showToastMsg) showToast("Synced with Google Sheet!");
+        updateStatus(true, "Live");
+        
+        // Quietly refresh the preview if a student is actively open
+        lookupStudent(true);
       } catch (err) {
-        updateStatus(false, "Offline");
+        if (!isSilent) updateStatus(false, "Offline");
+      } finally {
+        isSyncing = false;
       }
     }
 
@@ -509,7 +500,7 @@
       return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
     }
 
-    function lookupStudent() {
+    function lookupStudent(isSilentRefresh = false) {
       const query = document.getElementById('rollInput').value.trim().toLowerCase();
       const lab = document.getElementById('labSelect').value;
       const card = document.getElementById('studentCard');
@@ -547,13 +538,18 @@
         if (isGraded) {
           statusEl.className = "student-status status-graded";
           statusEl.textContent = `${lab}: ${score} / 10`;
-          marksInput.value = score;
+          // Only overwrite the input field if the user is not actively typing in it
+          if (!isSilentRefresh || document.activeElement !== marksInput) {
+            marksInput.value = score;
+          }
           saveBtn.textContent = "Update Mark";
           deleteBtn.style.display = "inline-flex";
         } else {
           statusEl.className = "student-status status-pending";
           statusEl.textContent = `${lab}: Unmarked`;
-          marksInput.value = "";
+          if (!isSilentRefresh || document.activeElement !== marksInput) {
+            marksInput.value = "";
+          }
           saveBtn.textContent = "Save Mark";
           deleteBtn.style.display = "none";
         }
@@ -584,6 +580,7 @@
       saveBtn.disabled = true;
       saveBtn.textContent = "Saving...";
 
+      // Optimistic local update
       currentStudent.marks[lab] = scoreNum;
       pushRecent(currentStudent.name, currentStudent.rollNo, lab, scoreNum);
 
@@ -616,7 +613,6 @@
       if (!currentStudent) return;
       const lab = document.getElementById('labSelect').value;
       
-      // Explicit warning naming the exact lab being deleted
       if (!confirm(`Are you SURE you want to delete ${currentStudent.name}'s mark for ${lab}?`)) return;
 
       currentStudent.marks[lab] = null;
@@ -664,16 +660,27 @@
       `).join('');
     }
 
-    document.getElementById('rollInput').addEventListener('input', lookupStudent);
-    document.getElementById('labSelect').addEventListener('change', lookupStudent);
+    document.getElementById('rollInput').addEventListener('input', () => lookupStudent(false));
+    document.getElementById('labSelect').addEventListener('change', () => lookupStudent(false));
     document.getElementById('marksInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleSave();
     });
 
-    // Auto re-fetch fresh data when switching tabs back to the web app
-    window.addEventListener('focus', () => fetchRoster(false));
+    // 1. Silent sync whenever you tap into the roll number input to look someone up
+    document.getElementById('rollInput').addEventListener('focus', () => syncData(true));
+    document.getElementById('labSelect').addEventListener('focus', () => syncData(true));
 
-    fetchRoster();
+    // 2. Silent sync when switching back to this app tab or unlocking the phone
+    window.addEventListener('focus', () => syncData(true));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncData(true);
+    });
+
+    // 3. Silent background polling every 12 seconds
+    setInterval(() => syncData(true), 12000);
+
+    // Initial load
+    syncData(false);
   </script>
 </body>
 </html>
